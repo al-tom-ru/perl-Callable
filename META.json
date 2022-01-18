@@ -1,5 +1,5 @@
 {
-   "abstract" : "It's new $module",
+   "abstract" : "make different things callable",
    "author" : [
       "Al Tom <al-tom.ru@yandex.ru>"
    ],
@@ -42,7 +42,7 @@
       },
       "runtime" : {
          "requires" : {
-            "perl" : "5.008001"
+            "perl" : "5.010"
          }
       },
       "test" : {

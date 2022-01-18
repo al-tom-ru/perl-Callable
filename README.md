@@ -1,14 +1,32 @@
+# DISCLAIMER
+
+Sorry for my English ...
+
 # NAME
 
-Callable - It's new $module
+Callable - make different things callable
 
 # SYNOPSIS
 
     use Callable;
 
+    {
+        package Some::Module;
+
+        sub some_function {
+            return 'some_value';
+        }
+    }
+
+    my $handler = Callable->new('Some::Module::some_function');
+    my $value = $handler->();
+    print $value; # some_value
+
 # DESCRIPTION
 
-Callable is ...
+Callable is a simple wrapper for make subroutines from different sources.
+Can be used in applications with configurable callback maps (e.g. website router config).
+Inspired by PHP's [callable](https://www.php.net/manual/ru/language.types.callable.php)
 
 # LICENSE
 

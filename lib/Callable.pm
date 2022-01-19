@@ -101,7 +101,7 @@ sub _make_handler {
 
     if (@args) {
         my $inner = $handler;
-        $handler = sub { $inner->(@args) };
+        $handler = sub { $inner->(@args, @_) };
     }
 
     return $handler;

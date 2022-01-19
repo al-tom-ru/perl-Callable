@@ -3,7 +3,7 @@ use strict;
 use utf8;
 use warnings;
 
-use Test::More tests => 5;
+use Test::More tests => 6;
 
 use Test::Exception;
 
@@ -150,4 +150,13 @@ subtest 'Make class callable' => sub {
         [qw(3 2 1)] => 'Class:baz:foo,bar,3,2,1',
         'class name with all default args'
     );
+};
+
+subtest 'Pass args to callable' => sub {
+    plan tests => 2;
+
+    my $callable = Callable->new([Class => 'baz', 'foo'], 'bar');
+
+    is $callable->('baz') => 'Class:baz:foo,bar,baz', 'class name with all args';
+    is "$callable" => 'Class:baz:foo,bar', 'class name with args interpolation';
 };

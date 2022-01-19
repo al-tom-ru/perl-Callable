@@ -10,6 +10,7 @@ use Test::Exception;
 use_ok 'Callable';
 
 sub foo { 'main:foo' }
+sub bar { ( $_[0] // '' ) eq __PACKAGE__ ? 'main:bar' : 'Bad method call' }
 
 {
 
@@ -17,9 +18,12 @@ sub foo { 'main:foo' }
 
     use Callable;
 
-    sub foo             { 'Foo:foo' }
-    sub with_package    { Callable->new('Foo::foo') }
-    sub without_package { Callable->new('foo'); }
+    sub foo { 'Foo:foo' }
+    sub bar { ( $_[0] // '' ) eq __PACKAGE__ ? 'Foo:bar' : 'Bad method call' }
+    sub with_package           { Callable->new('Foo::foo') }
+    sub without_package        { Callable->new('foo'); }
+    sub method_with_package    { Callable->new('Foo->bar') }
+    sub method_without_package { Callable->new('->bar') }
 }
 
 sub test_callable {
@@ -43,17 +47,27 @@ subtest 'Make subroutine callable' => sub {
 };
 
 subtest 'Make scalar callable' => sub {
-    plan tests => 9;
+    plan tests => 13;
 
     my $source   = 'foo';
     my $callable = Callable->new($source);
 
     test_callable( 'foo'      => 'main:foo', 'scalar without package' );
     test_callable( 'Foo::foo' => 'Foo:foo',  'scalar with package' );
-    test_callable( Foo::with_package() => 'Foo:foo', 'Foo::with_package' );
+
+    test_callable( Foo::with_package() => 'Foo:foo', 'with_package' );
     test_callable(
         Foo::without_package() => 'main:foo',
-        'Foo::without_package'
+        'without_package'
+    );
+
+    test_callable(
+        Foo::method_with_package() => 'Foo:bar',
+        'method_with_package'
+    );
+    test_callable(
+        Foo::method_without_package() => 'main:bar',
+        'method_without_package'
     );
 
     $source   = 'not_existing_subroutine';

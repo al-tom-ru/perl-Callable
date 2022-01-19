@@ -50,6 +50,21 @@ sub to_string {
     return $self->to_sub( scalar caller )->();
 }
 
+sub _first_arg {
+    my ( $self, $value ) = @_;
+
+    if ( @_ > 1 ) {
+        $self->{__first_arg} = $value;
+    }
+
+    if (wantarray) {
+        return unless exists $self->{__first_arg};
+        return ( $self->{__first_arg} );
+    }
+
+    return $self->{__first_arg} // undef;
+}
+
 sub _handler {
     my ( $self, $caller ) = @_;
 
@@ -63,23 +78,43 @@ sub _handler {
 sub _make_handler {
     my ( $self, $caller ) = @_;
 
-    my $ref = ref $self->{options}->[0];
+    my $source = $self->{options}->[0];
+    my $ref    = ref $source;
 
-    return $self->{options}->[0] if $ref eq 'CODE';
-    return $self->_make_subroutine_handler( $self->{options}->[0], $caller );
-}
+    my $handler =
+        $ref eq 'CODE'
+      ? $source
+      : $self->_make_scalar_handler( $source, $caller );
+    my @args = $self->_first_arg;
 
-sub _make_subroutine_handler {
-    my ( $self, $name, $caller ) = @_;
-
-    my @path = split /::/, $name;
-
-    if ( @path == 1 ) {
-        $name = "${caller}::$name";
+    if (@args) {
+        my $inner = $handler;
+        $handler = sub { $inner->(@args) };
     }
 
-    my $handler;
-    $handler = \&{$name};
+    return $handler;
+}
+
+sub _make_scalar_handler {
+    my ( $self, $name, $caller ) = @_;
+
+    my @path = split /\Q->\E/, $name;
+    croak "Wrong subroutine name format: $name" if @path > 2;
+
+    if ( @path == 2 ) {
+        $path[0] ||= $caller;
+        $self->_first_arg( $path[0] );
+        $name = join '::', @path;
+    }
+
+    @path = split /::/, $name;
+
+    if ( @path == 1 ) {
+        unshift @path, $caller;
+    }
+
+    $name = join( '::', @path );
+    my $handler = \&{$name};
 
     croak "Unable to find subroutine: $name" if not $handler;
 

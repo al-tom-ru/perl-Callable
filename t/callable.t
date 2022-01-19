@@ -32,12 +32,18 @@ sub bar { ( $_[0] // '' ) eq __PACKAGE__ ? 'main:bar' : 'Bad method call' }
 
     use Carp qw(croak);
 
-    sub new         { bless {}, __PACKAGE__ }
-    sub constructor { bless {}, __PACKAGE__ }
+    sub new         { bless [@_], __PACKAGE__ }
+    sub constructor { bless [@_], __PACKAGE__ }
 
     sub foo {
         croak 'Bad instance method call' unless $_[0]->isa(__PACKAGE__);
         'Class:foo';
+    }
+
+    sub bar {
+        croak 'Bad instance method call' unless $_[0]->isa(__PACKAGE__);
+        my @args = @{ $_[0] };
+        'Class:bar:' . join( ',', splice( @args, 1 ) );
     }
 }
 
@@ -97,11 +103,16 @@ subtest 'Make instance callable' => sub {
 };
 
 subtest 'Make class callable' => sub {
-    plan tests => 4;
+    plan tests => 6;
 
     test_callable( [ Class => 'foo' ] => 'Class:foo', 'class name as source' );
     test_callable(
         [ 'Class->constructor' => 'foo' ] => 'Class:foo',
         'class name with constructor as source'
+    );
+
+    test_callable(
+        [ Class => 'bar', 'foo', 'bar' ] => 'Class:bar:foo,bar',
+        'class name with constructor args'
     );
 };

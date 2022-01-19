@@ -103,7 +103,7 @@ sub _make_handler {
 sub _make_object_handler {
     my ( $self, $source, $caller ) = @_;
 
-    my ( $object, $method ) = @{$source};
+    my ( $object, $method, @args ) = @{$source};
 
     unless ( blessed $object) {
         my ( $class, $constructor, $garbage ) = split /\Q->\E/, $object;
@@ -112,7 +112,7 @@ sub _make_object_handler {
 
         $constructor //= $DEFAULT_CLASS_CONSTRUCTOR;
 
-        $object = $class->$constructor;
+        $object = $class->$constructor(@args);
     }
 
     $self->_first_arg($object);
@@ -156,7 +156,7 @@ sub _validate_options {
     croak USAGE unless $ref eq 'CODE' || $ref eq 'ARRAY' || $ref eq '';
 
     if ( $ref eq 'ARRAY' ) {
-        croak USAGE unless @{$source} == 2;
+        croak USAGE if @{$source} < 2;
         croak USAGE unless blessed $source->[0] || ref( $source->[0] ) eq '';
         croak USAGE if ref $source->[1];
     }

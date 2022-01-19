@@ -6,6 +6,7 @@ use utf8;
 use warnings;
 
 use Carp qw(croak);
+use Scalar::Util qw(blessed);
 
 use overload '&{}' => 'to_sub', '""' => 'to_string';
 use constant ( USAGE => 'Usage: Callable->new(sub { ... } | "subroutine_name")',
@@ -16,10 +17,23 @@ our $VERSION = "0.01";
 sub new {
     my ( $class, @options ) = @_;
 
+    if (   @options == 1
+        && blessed( $options[0] )
+        && $options[0]->isa(__PACKAGE__) )
+    {
+        return $options[0]->clone;
+    }
+
     my $self = bless { options => \@options }, $class;
     $self->_validate_options();
 
     return $self;
+}
+
+sub clone {
+    my ($self) = @_;
+
+    return bless { options => $self->{options} }, ref($self);
 }
 
 sub to_sub {
@@ -77,8 +91,12 @@ sub _validate_options {
 
     croak USAGE unless @{ $self->{options} } == 1;
 
-    my $ref = ref( $self->{options}->[0] );
-    croak USAGE unless $ref eq 'CODE' || $ref eq '';
+    my $source = $self->{options}->[0];
+    my $ref    = ref($source);
+    croak USAGE
+      unless $ref eq 'CODE'
+      || $ref eq ''
+      || ( blessed $source && $source->isa(__PACKAGE__) );
 }
 
 1;

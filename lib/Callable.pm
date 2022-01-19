@@ -8,7 +8,8 @@ use warnings;
 use Carp qw(croak);
 
 use overload '&{}' => 'to_sub', '""' => 'to_string';
-use constant ( USAGE => 'Usage: Callable->new(sub { ... })', );
+use constant ( USAGE => 'Usage: Callable->new(sub { ... } | "subroutine_name")',
+);
 
 our $VERSION = "0.01";
 
@@ -22,31 +23,53 @@ sub new {
 }
 
 sub to_sub {
-    my ($self) = @_;
+    my ( $self, $caller ) = @_;
 
-    return $self->_handler;
+    $caller //= caller;
+
+    return $self->_handler($caller);
 }
 
 sub to_string {
     my ($self) = @_;
 
-    return $self->to_sub()->();
+    return $self->to_sub( scalar caller )->();
 }
 
 sub _handler {
-    my ($self) = @_;
+    my ( $self, $caller ) = @_;
 
     unless ( exists $self->{__handler} ) {
-        $self->{__handler} = $self->_make_handler();
+        $self->{__handler} = $self->_make_handler($caller);
     }
 
     return $self->{__handler};
 }
 
 sub _make_handler {
-    my ($self) = @_;
+    my ( $self, $caller ) = @_;
 
-    return $self->{options}->[0];
+    my $ref = ref $self->{options}->[0];
+
+    return $self->{options}->[0] if $ref eq 'CODE';
+    return $self->_make_subroutine_handler( $self->{options}->[0], $caller );
+}
+
+sub _make_subroutine_handler {
+    my ( $self, $name, $caller ) = @_;
+
+    my @path = split /::/, $name;
+
+    if ( @path == 1 ) {
+        $name = "${caller}::$name";
+    }
+
+    my $handler;
+    $handler = \&{$name};
+
+    croak "Unable to find subroutine: $name" if not $handler;
+
+    return $handler;
 }
 
 sub _validate_options {
@@ -54,7 +77,8 @@ sub _validate_options {
 
     croak USAGE unless @{ $self->{options} } == 1;
 
-    croak USAGE unless ref( $self->{options}->[0] ) eq 'CODE';
+    my $ref = ref( $self->{options}->[0] );
+    croak USAGE unless $ref eq 'CODE' || $ref eq '';
 }
 
 1;

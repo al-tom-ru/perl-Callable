@@ -22,14 +22,24 @@ sub foo { 'main:foo' }
     sub without_package { Callable->new('foo'); }
 }
 
+sub test_callable {
+    my ( $source, $expected, $comment ) = @_;
+
+    $comment //= '';
+
+    my $callable = Callable->new($source);
+
+    is_deeply $callable->() => $expected, "Valid call result ($comment)";
+
+    if ( not ref $expected ) {
+        is "$callable" => $expected, "Valid interpolation result ($comment)";
+    }
+}
+
 subtest 'Make subroutine callable' => sub {
     plan tests => 2;
 
-    my $source   = sub { 'foo' };
-    my $callable = Callable->new($source);
-
-    is $callable->() => 'foo', 'Valid call result';
-    is "$callable"   => 'foo', 'Valid interpolation result';
+    test_callable( sub { 'foo' } => 'foo' );
 };
 
 subtest 'Make scalar callable' => sub {
@@ -38,20 +48,13 @@ subtest 'Make scalar callable' => sub {
     my $source   = 'foo';
     my $callable = Callable->new($source);
 
-    is $callable->() => 'main:foo', 'Valid call result';
-    is "$callable"   => 'main:foo', 'Valid interpolation result';
-
-    $callable = Callable->new('Foo::foo');
-    is $callable->() => 'Foo:foo', 'Valid call result';
-    is "$callable"   => 'Foo:foo', 'Valid interpolation result';
-
-    $callable = Foo::with_package;
-    is $callable->() => 'Foo:foo', 'Valid call result';
-    is "$callable"   => 'Foo:foo', 'Valid interpolation result';
-
-    $callable = Foo::without_package;
-    is $callable->() => 'main:foo', 'Valid call result';
-    is "$callable"   => 'main:foo', 'Valid interpolation result';
+    test_callable( 'foo'      => 'main:foo', 'scalar without package' );
+    test_callable( 'Foo::foo' => 'Foo:foo',  'scalar with package' );
+    test_callable( Foo::with_package() => 'Foo:foo', 'Foo::with_package' );
+    test_callable(
+        Foo::without_package() => 'main:foo',
+        'Foo::without_package'
+    );
 
     $source   = 'not_existing_subroutine';
     $callable = Callable->new($source);

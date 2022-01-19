@@ -3,7 +3,7 @@ use strict;
 use utf8;
 use warnings;
 
-use Test::More tests => 4;
+use Test::More tests => 5;
 
 use Test::Exception;
 
@@ -32,7 +32,8 @@ sub bar { ( $_[0] // '' ) eq __PACKAGE__ ? 'main:bar' : 'Bad method call' }
 
     use Carp qw(croak);
 
-    sub new { bless {}, __PACKAGE__ }
+    sub new         { bless {}, __PACKAGE__ }
+    sub constructor { bless {}, __PACKAGE__ }
 
     sub foo {
         croak 'Bad instance method call' unless $_[0]->isa(__PACKAGE__);
@@ -92,5 +93,15 @@ subtest 'Make instance callable' => sub {
     test_callable(
         [ Class->new(), 'foo' ] => 'Class:foo',
         'instance as source'
+    );
+};
+
+subtest 'Make class callable' => sub {
+    plan tests => 4;
+
+    test_callable( [ Class => 'foo' ] => 'Class:foo', 'class name as source' );
+    test_callable(
+        [ 'Class->constructor' => 'foo' ] => 'Class:foo',
+        'class name with constructor as source'
     );
 };

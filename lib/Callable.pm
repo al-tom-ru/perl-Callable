@@ -9,9 +9,13 @@ use Carp qw(croak);
 use Scalar::Util qw(blessed);
 
 use overload '&{}' => 'to_sub', '""' => 'to_string';
-use constant ( USAGE => 'Usage: Callable->new(&|$|[object, "method"])' );
+use constant ( USAGE =>
+'Usage: Callable->new(&|$|[object|"class"|"class->constructor", "method"])'
+);
 
 our $VERSION = "0.01";
+
+our $DEFAULT_CLASS_CONSTRUCTOR = 'new';
 
 sub new {
     my ( $class, @options ) = @_;
@@ -99,9 +103,21 @@ sub _make_handler {
 sub _make_object_handler {
     my ( $self, $source, $caller ) = @_;
 
-    $self->_first_arg( $source->[0] );
+    my ( $object, $method ) = @{$source};
 
-    return $source->[0]->can( $source->[1] );
+    unless ( blessed $object) {
+        my ( $class, $constructor, $garbage ) = split /\Q->\E/, $object;
+
+        croak "Wrong class name format: $object" if defined $garbage;
+
+        $constructor //= $DEFAULT_CLASS_CONSTRUCTOR;
+
+        $object = $class->$constructor;
+    }
+
+    $self->_first_arg($object);
+
+    return $object->can($method);
 }
 
 sub _make_scalar_handler {
@@ -141,7 +157,7 @@ sub _validate_options {
 
     if ( $ref eq 'ARRAY' ) {
         croak USAGE unless @{$source} == 2;
-        croak USAGE unless blessed $source->[0];
+        croak USAGE unless blessed $source->[0] || ref( $source->[0] ) eq '';
         croak USAGE if ref $source->[1];
     }
 }

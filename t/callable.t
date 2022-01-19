@@ -3,7 +3,7 @@ use strict;
 use utf8;
 use warnings;
 
-use Test::More tests => 3;
+use Test::More tests => 4;
 
 use Test::Exception;
 
@@ -24,6 +24,20 @@ sub bar { ( $_[0] // '' ) eq __PACKAGE__ ? 'main:bar' : 'Bad method call' }
     sub without_package        { Callable->new('foo'); }
     sub method_with_package    { Callable->new('Foo->bar') }
     sub method_without_package { Callable->new('->bar') }
+}
+
+{
+
+    package Class;
+
+    use Carp qw(croak);
+
+    sub new { bless {}, __PACKAGE__ }
+
+    sub foo {
+        croak 'Bad instance method call' unless $_[0]->isa(__PACKAGE__);
+        'Class:foo';
+    }
 }
 
 sub test_callable {
@@ -49,9 +63,6 @@ subtest 'Make subroutine callable' => sub {
 subtest 'Make scalar callable' => sub {
     plan tests => 13;
 
-    my $source   = 'foo';
-    my $callable = Callable->new($source);
-
     test_callable( 'foo'      => 'main:foo', 'scalar without package' );
     test_callable( 'Foo::foo' => 'Foo:foo',  'scalar with package' );
 
@@ -70,7 +81,16 @@ subtest 'Make scalar callable' => sub {
         'method_without_package'
     );
 
-    $source   = 'not_existing_subroutine';
-    $callable = Callable->new($source);
+    my $source   = 'not_existing_subroutine';
+    my $callable = Callable->new($source);
     dies_ok { $callable->() }, 'Unable to call not existing';
+};
+
+subtest 'Make instance callable' => sub {
+    plan tests => 2;
+
+    test_callable(
+        [ Class->new(), 'foo' ] => 'Class:foo',
+        'instance as source'
+    );
 };

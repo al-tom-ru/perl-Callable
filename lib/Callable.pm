@@ -9,8 +9,7 @@ use Carp qw(croak);
 use Scalar::Util qw(blessed);
 
 use overload '&{}' => 'to_sub', '""' => 'to_string';
-use constant ( USAGE => 'Usage: Callable->new(sub { ... } | "subroutine_name")',
-);
+use constant ( USAGE => 'Usage: Callable->new(&|$|[object, "method"])' );
 
 our $VERSION = "0.01";
 
@@ -82,9 +81,11 @@ sub _make_handler {
     my $ref    = ref $source;
 
     my $handler =
-        $ref eq 'CODE'
-      ? $source
-      : $self->_make_scalar_handler( $source, $caller );
+      $ref eq 'CODE' ? $source
+      : (
+          $ref eq 'ARRAY' ? $self->_make_object_handler( $source, $caller )
+        : $self->_make_scalar_handler( $source, $caller )
+      );
     my @args = $self->_first_arg;
 
     if (@args) {
@@ -93,6 +94,14 @@ sub _make_handler {
     }
 
     return $handler;
+}
+
+sub _make_object_handler {
+    my ( $self, $source, $caller ) = @_;
+
+    $self->_first_arg( $source->[0] );
+
+    return $source->[0]->can( $source->[1] );
 }
 
 sub _make_scalar_handler {
@@ -128,10 +137,13 @@ sub _validate_options {
 
     my $source = $self->{options}->[0];
     my $ref    = ref($source);
-    croak USAGE
-      unless $ref eq 'CODE'
-      || $ref eq ''
-      || ( blessed $source && $source->isa(__PACKAGE__) );
+    croak USAGE unless $ref eq 'CODE' || $ref eq 'ARRAY' || $ref eq '';
+
+    if ( $ref eq 'ARRAY' ) {
+        croak USAGE unless @{$source} == 2;
+        croak USAGE unless blessed $source->[0];
+        croak USAGE if ref $source->[1];
+    }
 }
 
 1;

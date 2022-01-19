@@ -20,11 +20,11 @@ our $DEFAULT_CLASS_CONSTRUCTOR = 'new';
 sub new {
     my ( $class, @options ) = @_;
 
-    if (   @options == 1
+    if (   @options
         && blessed( $options[0] )
         && $options[0]->isa(__PACKAGE__) )
     {
-        return $options[0]->clone;
+        return $options[0]->clone( splice @options, 1 );
     }
 
     my $self = bless { options => \@options }, $class;
@@ -34,9 +34,16 @@ sub new {
 }
 
 sub clone {
-    my ($self) = @_;
+    my ( $self, @options ) = @_;
 
-    return bless { options => $self->{options} }, ref($self);
+    if (@options) {
+        unshift @options, $self->{options}->[0];
+    }
+    else {
+        @options = @{ $self->{options} };
+    }
+
+    return bless { options => \@options }, ref($self);
 }
 
 sub to_sub {
@@ -81,8 +88,8 @@ sub _handler {
 sub _make_handler {
     my ( $self, $caller ) = @_;
 
-    my $source = $self->{options}->[0];
-    my $ref    = ref $source;
+    my ( $source, @default_args ) = @{ $self->{options} };
+    my $ref = ref $source;
 
     my $handler =
       $ref eq 'CODE' ? $source
@@ -90,7 +97,7 @@ sub _make_handler {
           $ref eq 'ARRAY' ? $self->_make_object_handler( $source, $caller )
         : $self->_make_scalar_handler( $source, $caller )
       );
-    my @args = $self->_first_arg;
+    my @args = ( $self->_first_arg, @default_args );
 
     if (@args) {
         my $inner = $handler;
@@ -149,7 +156,7 @@ sub _make_scalar_handler {
 sub _validate_options {
     my ($self) = @_;
 
-    croak USAGE unless @{ $self->{options} } == 1;
+    croak USAGE unless @{ $self->{options} };
 
     my $source = $self->{options}->[0];
     my $ref    = ref($source);

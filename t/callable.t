@@ -11,6 +11,7 @@ use_ok 'Callable';
 
 sub foo { 'main:foo' }
 sub bar { ( $_[0] // '' ) eq __PACKAGE__ ? 'main:bar' : 'Bad method call' }
+sub baz { 'main:baz' . join( ',', @_ ) }
 
 {
 
@@ -20,10 +21,13 @@ sub bar { ( $_[0] // '' ) eq __PACKAGE__ ? 'main:bar' : 'Bad method call' }
 
     sub foo { 'Foo:foo' }
     sub bar { ( $_[0] // '' ) eq __PACKAGE__ ? 'Foo:bar' : 'Bad method call' }
+    sub baz { 'Foo:baz' . join( ',', @_ ) }
+
     sub with_package           { Callable->new('Foo::foo') }
     sub without_package        { Callable->new('foo'); }
     sub method_with_package    { Callable->new('Foo->bar') }
     sub method_without_package { Callable->new('->bar') }
+    sub with_args              { Callable->new('Foo::baz') }
 }
 
 {
@@ -32,8 +36,8 @@ sub bar { ( $_[0] // '' ) eq __PACKAGE__ ? 'main:bar' : 'Bad method call' }
 
     use Carp qw(croak);
 
-    sub new         { bless [@_], __PACKAGE__ }
-    sub constructor { bless [@_], __PACKAGE__ }
+    sub new         { bless [ splice @_, 1 ], __PACKAGE__ }
+    sub constructor { bless [ splice @_, 1 ], __PACKAGE__ }
 
     sub foo {
         croak 'Bad instance method call' unless $_[0]->isa(__PACKAGE__);
@@ -42,49 +46,68 @@ sub bar { ( $_[0] // '' ) eq __PACKAGE__ ? 'main:bar' : 'Bad method call' }
 
     sub bar {
         croak 'Bad instance method call' unless $_[0]->isa(__PACKAGE__);
-        my @args = @{ $_[0] };
-        'Class:bar:' . join( ',', splice( @args, 1 ) );
+        'Class:bar:' . join( ',', @{ $_[0] } );
+    }
+
+    sub baz {
+        croak 'Bad instance method call' unless $_[0]->isa(__PACKAGE__);
+        my @args = ( @{ $_[0] }, splice( @_, 1 ) );
+        'Class:baz:' . join( ',', @args );
     }
 }
 
 sub test_callable {
-    my ( $source, $expected, $comment ) = @_;
+    my ( $source, $args, $expected, $comment ) = @_;
 
     $comment //= '';
 
-    my $callable = Callable->new($source);
+    eval {
+        my $callable = Callable->new( $source, @{$args} );
 
-    is_deeply $callable->() => $expected, "Valid call result ($comment)";
+        is_deeply $callable->() => $expected, "Valid call result ($comment)";
 
-    if ( not ref $expected ) {
-        is "$callable" => $expected, "Valid interpolation result ($comment)";
+        if ( not ref $expected ) {
+            is
+              "$callable" => $expected,
+              "Valid interpolation result ($comment)";
+        }
+    };
+
+    if ($@) {
+        die "[$comment] $@";
     }
 }
 
 subtest 'Make subroutine callable' => sub {
-    plan tests => 2;
+    plan tests => 4;
 
-    test_callable( sub { 'foo' } => 'foo' );
+    test_callable( sub { 'foo' }, [] => 'foo', 'subroutine source' );
+    test_callable(
+        sub { 'foo:' . $_[0] }, ['bar'] => 'foo:bar',
+        'subroutine source with default arg'
+    );
 };
 
 subtest 'Make scalar callable' => sub {
-    plan tests => 13;
+    plan tests => 17;
 
-    test_callable( 'foo'      => 'main:foo', 'scalar without package' );
-    test_callable( 'Foo::foo' => 'Foo:foo',  'scalar with package' );
+    test_callable( 'foo',      [] => 'main:foo', 'scalar without package' );
+    test_callable( 'Foo::foo', [] => 'Foo:foo',  'scalar with package' );
+    test_callable( 'baz', ['zz'] => 'main:bazzz', 'scalar with default args' );
 
-    test_callable( Foo::with_package() => 'Foo:foo', 'with_package' );
+    test_callable( Foo::with_package(), [] => 'Foo:foo', 'with_package' );
     test_callable(
-        Foo::without_package() => 'main:foo',
+        Foo::without_package(), [] => 'main:foo',
         'without_package'
     );
+    test_callable( Foo::with_args(), ['zz'] => 'Foo:bazzz', 'with_args' );
 
     test_callable(
-        Foo::method_with_package() => 'Foo:bar',
+        Foo::method_with_package(), [] => 'Foo:bar',
         'method_with_package'
     );
     test_callable(
-        Foo::method_without_package() => 'main:bar',
+        Foo::method_without_package(), [] => 'main:bar',
         'method_without_package'
     );
 
@@ -97,22 +120,34 @@ subtest 'Make instance callable' => sub {
     plan tests => 2;
 
     test_callable(
-        [ Class->new(), 'foo' ] => 'Class:foo',
+        [ Class->new(), 'foo' ], [] => 'Class:foo',
         'instance as source'
     );
 };
 
 subtest 'Make class callable' => sub {
-    plan tests => 6;
+    plan tests => 10;
 
-    test_callable( [ Class => 'foo' ] => 'Class:foo', 'class name as source' );
     test_callable(
-        [ 'Class->constructor' => 'foo' ] => 'Class:foo',
+        [ Class => 'foo' ], [] => 'Class:foo',
+        'class name as source'
+    );
+    test_callable(
+        [ 'Class->constructor' => 'foo' ], [] => 'Class:foo',
         'class name with constructor as source'
     );
 
     test_callable(
-        [ Class => 'bar', 'foo', 'bar' ] => 'Class:bar:foo,bar',
+        [ Class => 'bar', 'foo', 'bar' ], [] => 'Class:bar:foo,bar',
         'class name with constructor args'
+    );
+    test_callable(
+        [ Class => 'baz' ], [ 'foo', 'bar' ] => 'Class:baz:foo,bar',
+        'class name with args'
+    );
+    test_callable(
+        [ Class => 'baz', 'foo', 'bar' ],
+        [qw(3 2 1)] => 'Class:baz:foo,bar,3,2,1',
+        'class name with all default args'
     );
 };

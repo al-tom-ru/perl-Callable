@@ -53,6 +53,17 @@
       }
    },
    "release_status" : "unstable",
+   "resources" : {
+      "bugtracker" : {
+         "web" : "https://github.com/al-tom-ru/perl-Callable/issues"
+      },
+      "homepage" : "https://github.com/al-tom-ru/perl-Callable",
+      "repository" : {
+         "type" : "git",
+         "url" : "git://github.com/al-tom-ru/perl-Callable.git",
+         "web" : "https://github.com/al-tom-ru/perl-Callable"
+      }
+   },
    "version" : "0.01",
    "x_serialization_backend" : "JSON::PP version 2.27300_01",
    "x_static_install" : 1

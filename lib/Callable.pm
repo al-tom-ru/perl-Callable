@@ -8,7 +8,7 @@ use warnings;
 use Carp qw(croak);
 use Scalar::Util qw(blessed);
 
-use overload '&{}' => 'to_sub', '""' => 'to_string';
+use overload '&{}' => '_to_sub', '""' => '_to_string';
 use constant ( USAGE =>
 'Usage: Callable->new(&|$|[object|"class"|"class->constructor", "method"])'
 );
@@ -24,7 +24,7 @@ sub new {
         && blessed( $options[0] )
         && $options[0]->isa(__PACKAGE__) )
     {
-        return $options[0]->clone( splice @options, 1 );
+        return $options[0]->_clone( splice @options, 1 );
     }
 
     my $self = bless { options => \@options }, $class;
@@ -33,7 +33,7 @@ sub new {
     return $self;
 }
 
-sub clone {
+sub _clone {
     my ( $self, @options ) = @_;
 
     if (@options) {
@@ -44,20 +44,6 @@ sub clone {
     }
 
     return bless { options => \@options }, ref($self);
-}
-
-sub to_sub {
-    my ( $self, $caller ) = @_;
-
-    $caller //= caller;
-
-    return $self->_handler($caller);
-}
-
-sub to_string {
-    my ($self) = @_;
-
-    return $self->to_sub( scalar caller )->();
 }
 
 sub _first_arg {
@@ -153,6 +139,20 @@ sub _make_scalar_handler {
     return $handler;
 }
 
+sub _to_string {
+    my ($self) = @_;
+
+    return $self->_to_sub( scalar caller )->();
+}
+
+sub _to_sub {
+    my ( $self, $caller ) = @_;
+
+    $caller //= caller;
+
+    return $self->_handler($caller);
+}
+
 sub _validate_options {
     my ($self) = @_;
 
@@ -184,25 +184,189 @@ Callable - make different things callable
 
 =head1 SYNOPSIS
 
-    use Callable;
+    my $db = DBI->connect( ... );
+    my $router = My::Router->new(
+        # use subroutine as handler
+        '/' => Callable->(
+            sub { my ($db, $request) = @_; ... },
 
-    {
-        package Some::Module;
+            # inject default arguments to handler
+            $db
+        ),
 
-        sub some_function {
-            return 'some_value';
-        }
-    }
+        # use subroutine by name as handler
+        '/profile' => Callable->new(
+            # call handler as package method
+            'Controller::Profile->home',
 
-    my $handler = Callable->new('Some::Module::some_function');
-    my $value = $handler->();
-    print $value; # some_value
+            # inject default arguments to handler
+            db => $db,
+            authenticated_only => 1
+        ),
+
+        # create class instance and use it as handler
+        '/admin' => Callable->new(
+            [
+                # class_name => method
+                'Controller::Admin' => 'home',
+
+                # inject arguments to constructor
+                db => $db
+            ],
+
+            # inject default arguments to handler
+            restrictions => {role => 'admin'}
+        ),
+    );
+
+    my $handler = $router->match($ENV{REQUEST_URI});
+
+    # send additional arguments when calling handler
+    my $response = $handler->(Request->new(%ENV));
+    print $response->dump();
 
 =head1 DESCRIPTION
 
 Callable is a simple wrapper for make subroutines from different sources.
 Can be used in applications with configurable callback maps (e.g. website router config).
 Inspired by PHP's L<callable|https://www.php.net/manual/ru/language.types.callable.php>
+
+=head1 METHODS
+
+=head2 new($source[, @default_args])
+
+Create instance. Arguments:
+
+=over
+
+=item $source
+
+See L</SOURCES>
+
+=item @default_args
+
+Default arguments that will be sent to handler
+
+    my $hello = Callable->new(sub { join ', ', @_; }, 'Hello');
+    print $hello->('World'); # Hello, World
+    print $hello->('Bro'); # Hello, Bro
+    print "$hello, World"; # Hello, World
+
+=back
+
+=head2 overload '&{}'
+
+Callable instance can be called like a subroutine reference:
+
+    my $foo = Callable->new( ... );
+    my $result = $foo->();
+
+=head2 overload '""'
+
+Callable instance can be interpolated:
+
+    my $foo = Callable->new( ... );
+    my $result = "Foo: $foo."; # same as 'Foo: ' . $foo->() . '.'
+
+=head1 SOURCES
+
+=head2 subroutine reference
+
+    my $foo = Callable->new(sub { ... });
+
+=head2 subroutine name
+
+    my $foo = Callable->new('foo::bar');
+
+Finds subroutine reference by it's name (C<\&{$name}>). Name can be:
+Fully-qualified (C<Module::Name::sub_name>) names used as is,
+not qualified names (C<sub_name>) will be prefixed with package, where
+callable was called from (see L<caller>):
+
+    {
+        package Foo;
+        sub foo { 'Foo' }
+        sub bar { Callable->new('Foo::foo') }
+        sub baz { Callable->new('foo') }
+    }
+
+    package main;
+
+    # ok, fully-qualified name 'Foo::foo', subroutine found
+    print Foo::bar->();
+
+    # not ok, 'foo' has no package name, so it will be interpreted as 'main::foo'
+    print Foo::baz->();
+
+=head2 package method
+
+Same as L</subroutine name>, but with C<-E<gt>> before subroutine name:
+
+    # Fully-qualified
+    my $foo = Callable->new('Module::Name->sub_name');
+
+    # Not qualified
+    my $foo = Callable->new('->sub_name');
+
+=head2 object method
+
+    my $obj = My::Class->new( ... );
+    my $foo = Callable->new([$obj => 'method_name']);
+
+=head2 class and method
+
+    my $foo = Callable->new(['My::Class' => 'method_name']);
+
+C<$foo-E<gt>()> creates C<My::Class> instance and calls C<-E<gt>metod_name>.
+
+Constructor name can be specified:
+
+    my $foo = Callable->new(['My::Class->constructor_name' => 'method_name']);
+
+C<$Callable::DEFAULT_CLASS_CONSTRUCTOR> is used when no constructor name
+given (C<new> by default)
+
+=head2 callable
+
+Callable instance can be cloned from another callable instance:
+
+    my $source = Callable->new(sub { ... });
+    my $foo = Callable->new($source);
+
+Usable for re-create class instance (L</class and method>) and/or for resetting
+default L</Arguments>
+
+=head1 ARGUMENTS
+
+Send arguments when calling:
+
+    my $foo = Callable->new(sub { join ',', @_ });
+    print $foo->(qw(Hello , World)); # prints Hello,World
+
+Send default arguments when create instance:
+
+    my $foo = Callable->new(sub { join ',', @_ }, 'Hello');
+    print $foo->(qw(, World)); # prints Hello,World
+    print $foo->(qw(, Bro)); # prints Hello,Bro
+
+Send arguments to class constructor:
+
+    {
+        package My::Class;
+        sub new {
+            my $class = shift;
+            return bless \@_, $class;
+        }
+
+        sub foo {
+            my $self = shift;
+            return join ' ', @{$self}, @_;
+        }
+    }
+
+    my $foo = Callable->new(['My::Class', 'foo', 'Hello'], ',');
+    print $foo->('World'); # prints Hello , World
+    print $foo->('Bro'); # prints Hello , Bro
 
 =head1 LICENSE
 

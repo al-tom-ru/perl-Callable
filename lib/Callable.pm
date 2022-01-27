@@ -6,6 +6,7 @@ use utf8;
 use warnings;
 
 use Carp qw(croak);
+use Module::Load;
 use Scalar::Util qw(blessed);
 
 use overload '&{}' => '_to_sub', '""' => '_to_string';
@@ -87,7 +88,7 @@ sub _make_handler {
 
     if (@args) {
         my $inner = $handler;
-        $handler = sub { $inner->(@args, @_) };
+        $handler = sub { $inner->( @args, @_ ) };
     }
 
     return $handler;
@@ -102,6 +103,8 @@ sub _make_object_handler {
         my ( $class, $constructor, $garbage ) = split /\Q->\E/, $object;
 
         croak "Wrong class name format: $object" if defined $garbage;
+
+        load $class;
 
         $constructor //= $DEFAULT_CLASS_CONSTRUCTOR;
 

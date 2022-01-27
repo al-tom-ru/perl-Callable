@@ -56,6 +56,8 @@ sub baz { 'main:baz' . join( ',', @_ ) }
     }
 }
 
+$INC{Class} = 1;    # disable loading by Module::Load
+
 sub test_callable {
     my ( $source, $args, $expected, $comment ) = @_;
 
@@ -155,8 +157,9 @@ subtest 'Make class callable' => sub {
 subtest 'Pass args to callable' => sub {
     plan tests => 2;
 
-    my $callable = Callable->new([Class => 'baz', 'foo'], 'bar');
+    my $callable = Callable->new( [ Class => 'baz', 'foo' ], 'bar' );
 
-    is $callable->('baz') => 'Class:baz:foo,bar,baz', 'class name with all args';
+    is $callable->('baz') => 'Class:baz:foo,bar,baz',
+      'class name with all args';
     is "$callable" => 'Class:baz:foo,bar', 'class name with args interpolation';
 };

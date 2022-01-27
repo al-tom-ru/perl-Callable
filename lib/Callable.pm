@@ -14,7 +14,7 @@ use constant ( USAGE =>
 'Usage: Callable->new(&|$|[object|"class"|"class->constructor", "method"])'
 );
 
-our $VERSION = "0.01";
+our $VERSION = "0.02";
 
 our $DEFAULT_CLASS_CONSTRUCTOR = 'new';
 
